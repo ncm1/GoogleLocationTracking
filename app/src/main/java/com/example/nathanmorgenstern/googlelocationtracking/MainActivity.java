@@ -1,16 +1,17 @@
 package com.example.nathanmorgenstern.googlelocationtracking;
 
-import android.Manifest;
-import android.app.Activity;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationManager;
 import android.location.LocationListener;
 import android.os.Handler;
 import android.support.annotation.NonNull;
+import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.os.ResultReceiver;
@@ -19,8 +20,9 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -41,7 +43,6 @@ import java.util.Date;
 import static android.R.attr.data;
 import static android.R.attr.id;
 import static android.R.attr.start;
-import static com.example.nathanmorgenstern.googlelocationtracking.R.id.checkInList;
 import static java.security.AccessController.getContext;
 
 public class MainActivity extends AppCompatActivity{
@@ -56,9 +57,13 @@ public class MainActivity extends AppCompatActivity{
 
     /*Variables for storing location data */
     private Location mLastLocation;
+    private Location mCurrentLocation;
     private double mLastLatitude  = -111.0;
     private double mLastLongitude = -111.0;
+    private double mCurrentLatitude = mLastLatitude;
+    private double mCurrentLongitude = mLastLongitude;
     private String mLastCheckInTime = "null";
+    private String mLastCheckInName = "null";
 
     /* Location request parameters */
     private static final long MIN_TIME = 0;
@@ -73,10 +78,12 @@ public class MainActivity extends AppCompatActivity{
 
     /*Android widgets */
     private Button btn_start;
-    private Button btn_trackLocation;
+    private Button btn_load_list;
     private Button btn_check_in;
     private TextView latLongText;
+    private EditText checkInName;
     private ListView checkInListView;
+    private Dialog dialog = null;
 
     /* Variables used for Geocoder Service */
     private AddressResultReceiver mResultReceiver;
@@ -96,6 +103,7 @@ public class MainActivity extends AppCompatActivity{
 
         setupWidgets();
         requestPermissions();
+        //Get the last location and set it as current for default
         getLastLocation();
         defineLocationCallback();
         defineLocationRequest();
@@ -120,10 +128,10 @@ public class MainActivity extends AppCompatActivity{
     /* SETUP METHODS for onCreate */
     public void setupWidgets(){
         btn_start         = (Button)  findViewById(R.id.btnStart);
-        btn_trackLocation = (Button)  findViewById(R.id.btnTrackLocation);
         btn_check_in      = (Button)  findViewById(R.id.btnCheckIn);
+        btn_load_list     = (Button)  findViewById(R.id.btnOpenList);
         latLongText       = (TextView)findViewById(R.id.txtCoordinates);
-        checkInListView   = (ListView)findViewById(checkInList);
+        checkInName       = (EditText)findViewById(R.id.checkInNameInput);
 
         btn_start.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -132,59 +140,54 @@ public class MainActivity extends AppCompatActivity{
             }
         });
 
-        /*btn_trackLocation.setOnClickListener(new View.OnClickListener(){
-            @Override
-            public void onClick(View view){
-                fetchAddressButtonHandler();
-                getLastLocation();
-                updateText();
-            }
-        });*/
-
         btn_check_in.setOnClickListener(new View.OnClickListener(){
             @Override
             public void onClick(View view) {
+                updateTime();
+                updateCheckInName();
                 addLocationToDatabase();
-                updateListView();
+                //updateListView();
             }
         });
 
-        checkInListView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
-
+        btn_load_list.setOnClickListener(new View.OnClickListener() {
             @Override
-            public boolean onItemLongClick(AdapterView<?> parent, View view,
-                                           int position, long id) {
-
-                TextView address = (TextView) view.findViewById(R.id.address_text);
-                String addressResult =  address.getText().toString();
-                Log.v(TAG, "onLongItemClicked: " + addressResult);
-                removeLocationFromDatabase(addressResult);
-                return false;
+            public void onClick(View view) {
+                startCheckListActivity();
             }
         });
+
 
         sqlHelper = new MySQLHelper(this);
     }
+
+    /* Race conditions occurs when two thread operate on same object without proper synchronization
+     * and there operation interleaves on each other.
+     *
+     * Race conditions have been avoided by waiting for the location to be received inside the callback
+     * function, otherwise
+     */
 
     public void defineLocationCallback(){
         mLocationCallback = new LocationCallback() {
             @Override
             public void onLocationResult(LocationResult locationResult) {
+                Location tempLocation = null;
                 for (Location location : locationResult.getLocations()) {
-                    Log.v(TAG, "new location");
-                    updateTime();
-                    updateLocation(location);
                     // Update UI with location data
                     // ...
+                    tempLocation = location;
                 }
+                Log.v(TAG, "new location");
+                updateLocation(tempLocation);
             };
         };
     }
 
     public void defineLocationRequest(){
         mLocationRequest = new LocationRequest();
-        mLocationRequest.setInterval(10000);
-        mLocationRequest.setFastestInterval(5000);
+        mLocationRequest.setInterval(1000);
+        mLocationRequest.setFastestInterval(500);
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
     }
 
@@ -273,7 +276,7 @@ public class MainActivity extends AppCompatActivity{
             mAddressOutput = resultData.getString(Constants.RESULT_DATA_KEY);
             mAddressRequested = false;
             updateText();
-            updateListView();
+            //updateListView();
         }
     }
 
@@ -308,10 +311,26 @@ public class MainActivity extends AppCompatActivity{
 
     public void updateLocation(Location location){
         Log.v(TAG,"updateLocation()");
+        Log.v(TAG,"distance: " + location.distanceTo(mLastLocation));
+        //mLastLocation = mCurrentLocation;
         mLastLocation = location;
         startIntentService();
-        mLastLatitude = location.getLatitude();
+
+        mLastLatitude  = location.getLatitude();
         mLastLongitude = location.getLongitude();
+
+        String tempName = withinRadius(mLastLatitude,mLastLongitude);
+        Log.v(TAG, "updateLocation()->tempName: " + tempName);
+
+        if(!tempName.equals("No name in radius")) {
+            String time = sqlHelper.getLastCheckInTimeForLocation(tempName);
+            if(!time.equals("none found"))
+                showDialog(tempName,time);
+            else if(dialog != null)
+                dialog.dismiss();
+        }
+        else if(dialog != null)
+            dialog.dismiss();
         //updateText();
     }
 
@@ -337,24 +356,79 @@ public class MainActivity extends AppCompatActivity{
         DateFormat dateFormat = new SimpleDateFormat("h:mm a");
         Date date = new Date();
         mLastCheckInTime = dateFormat.format(date);
+        Log.v(TAG,"mLastCheckInTime: " + mLastCheckInTime);
+    }
+
+    public void updateCheckInName(){
+        if(checkInName != null)
+            mLastCheckInName = checkInName.getText().toString();
+        else
+            mLastCheckInName = "NULL";
+    }
+
+    public String withinRadius(double lat, double lon){
+        ArrayList<LocationInfo> locationInfoList = sqlHelper.getAllLocations();
+        int locationListSize = locationInfoList.size();
+
+        Log.v(TAG, "locationInfoList.size(): " + locationListSize);
+
+        Location loc1 = new Location("temp");
+        loc1.setLatitude(lat);
+        loc1.setLongitude(lon);
+
+        double dist = 0.0;
+        for(int i = 0; i < locationListSize; i++){
+            Location loc2 = new Location("temp");
+            loc2.setLatitude(Double.parseDouble(locationInfoList.get(i).getLatitude()));
+            loc2.setLongitude(Double.parseDouble(locationInfoList.get(i).getLongitude()));
+            dist = loc1.distanceTo(loc2);
+
+            if(dist <= 30.0) {
+                Log.v(TAG, "dist: " + dist + "m");
+                return locationInfoList.get(i).getCheckInName();
+            }
+        }
+
+        return "No name in radius";
     }
 
     /* END LOCATION METHODS */
 
     /* UI METHODS */
+
+    public void showDialog(String name, String time){
+        Log.v(TAG, "showDialogCalled()");
+        // custom dialog
+        dialog = new Dialog(this);
+        dialog.setContentView(R.layout.simple_text_view);
+        dialog.setTitle("Title...");
+
+        // set the custom dialog components - text, image and button
+        TextView check_in_name = (TextView) dialog.findViewById(R.id.locationCheckInName);
+        check_in_name.setText("Check in name: " + name);
+        TextView check_in_time = (TextView) dialog.findViewById(R.id.locationCheckInTime);
+        check_in_time.setText("Check in time: " + time);
+
+        Button dialogButton = (Button) dialog.findViewById(R.id.btnOkDialog);
+        // if button is clicked, close the custom dialog
+        dialogButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+                dialog = null;
+            }
+        });
+
+        if(dialog != null)
+            dialog.show();
+    }
+
     public void updateText(){
         Log.v(TAG,"updateText()");
         String f1 = String.format("%.4f", mLastLatitude);
         String f2 = String.format("%.4f", mLastLongitude);
         latLongText.setText(f1 + "/" + f2 + "\n " + mAddressOutput);
-    }
-
-    public void updateListView(){
-        ArrayList<LocationInfo> locationList = new ArrayList<LocationInfo>();
-        locationList = sqlHelper.getAllLocations();
-
-        LocationInfoAdapter array_adapter = new LocationInfoAdapter(this,R.layout.location_info_view, locationList);
-        checkInListView.setAdapter(array_adapter);
+        updateCheckInName();
     }
 
     public void startLocationUpdates(){
@@ -386,23 +460,53 @@ public class MainActivity extends AppCompatActivity{
         startActivity(intent);
     }
 
+    public void startCheckListActivity(){
+        Intent intent = new Intent(this, CheckInListActivity.class);
+        startActivity(intent);
+    }
     /* END ACTIVITY / SERVICES METHODS */
 
     /* DATABASE METHODS */
     public void addLocationToDatabase(){
+        Log.v(TAG,"addLocationToDatabase()");
 
         String mLat = Double.toString(mLastLatitude);
         String mLon = Double.toString(mLastLongitude);
         String mTim = mLastCheckInTime;
         String mAdd = mAddressOutput;
 
-        sqlHelper.addLocationInfo(new LocationInfo(mLat, mLon, mTim, mAdd));
+        LocationInfo tempLocation = new LocationInfo(0,mLat, mLon, mTim, mAdd);
+
+        sqlHelper.addLocationInfo(tempLocation);
+        int fk = sqlHelper.getLocationTablePrimaryKey(mTim);
+        if(!mLastCheckInName.equals("NULL")){
+
+            String tempName = withinRadius(mLastLatitude,mLastLongitude);
+            Log.v(TAG, "tempName: " + tempName);
+
+            //No name found within the radius, add the check in name
+            if(tempName.equals("No name in radius")) {
+                sqlHelper.addCheckInName(mLastCheckInName, mAddressOutput);
+                int fk_checkIn = sqlHelper.getCheckInTablePrimaryKey(mLastCheckInName, mAddressOutput);
+                sqlHelper.addToNormalized(fk, fk_checkIn);
+            }
+
+            //Name/address pair are already in the table, set them accordingly
+            else if(!tempName.equals("No name in radius")){
+                String address = sqlHelper.getAddressOfCheckIn(tempName);
+                int fk_checkIn = sqlHelper.getCheckInTablePrimaryKey(tempName, address);
+                sqlHelper.addToNormalized(fk, fk_checkIn);
+            }
+        }
+        else{
+            sqlHelper.addCheckInName(" ", mAddressOutput);
+            int fk_checkIn = sqlHelper.getCheckInTablePrimaryKey(" ", mAddressOutput);
+            sqlHelper.addToNormalized(fk, fk_checkIn);
+        }
+
     }
 
-    public void removeLocationFromDatabase(String address){
-        sqlHelper.deleteLocationInfo(address);
-        updateListView();
-    }
+
 
     /* END DATABASE METHODS*/
 

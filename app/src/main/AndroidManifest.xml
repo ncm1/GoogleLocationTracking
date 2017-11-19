@@ -23,7 +23,9 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyDvQjYl_AHDK3ty7mP9iK3P40OUQW8lENo" />
 
-        <activity android:name=".MainActivity">
+        <activity
+            android:name=".MainActivity"
+            android:windowSoftInputMode="adjustPan">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -34,7 +36,9 @@
 
         <service
             android:name=".GeocoderIntentService"
-            android:exported="false"></service>
+            android:exported="false" />
+
+        <activity android:name=".CheckInListActivity"></activity>
     </application>
 
 </manifest>

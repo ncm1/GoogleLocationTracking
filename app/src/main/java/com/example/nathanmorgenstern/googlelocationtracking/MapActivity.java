@@ -1,29 +1,50 @@
 package com.example.nathanmorgenstern.googlelocationtracking;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.ResultReceiver;
+import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.util.Log;
+import android.view.View;
+
 import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
 
 
 public class MapActivity extends FragmentActivity implements OnMapReadyCallback, GoogleMap.OnMapLoadedCallback {
     private GoogleMap mMap = null;
 
+    /*Variables for getting location data*/
+    private FusedLocationProviderClient mFusedLocationClient;
+    private LocationManager locationManager;
+    private LocationListener locationListener;
+    private LocationCallback mLocationCallback;
+    private Boolean mRequestingLocationUpdates = false;
+
     private LocationRequest mLocationRequest;
     private Location mLastLocation;
     private GoogleApiClient mGoogleApiClient;
 
-    private static final String TAG = "MAIN_ACTIVITY";
+    private static final String TAG = "MAP_ACTIVITY";
     private static final int MY_PERMISSION_REQUEST_CODE = 7171;
     private static final int PLAY_SERVICES_RESOLUTION_REQUEST = 7172;
 
@@ -31,12 +52,26 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     private double mLong;
     private Boolean extraSuccess = false;
 
+    private String mAddressOutput;
+    private String mNewLatitude;
+    private String mNewLongitude;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_map);
 
-        //checkPermissions();
+
+        /*
+        requestPermissions();
+        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        defineLocationRequest();
+        defineLocationCallback();
+        //TODO: add boolean variable to indicate if "tracking mode" is on or off
+        startLocationUpdates();
+        */
+
+
         Intent intent = getIntent();
         mLat = intent.getDoubleExtra("mLatitude", -500);
         mLong = intent.getDoubleExtra("mLongitude", -500);
@@ -46,31 +81,36 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
 
         MapFragment mf = (MapFragment) getFragmentManager().findFragmentById(R.id.mapFrag);
         mf.getMapAsync(this);
+
+        View.OnClickListener mOnClickListener = new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+
+            }
+        };
+
         //setUpMapIfNeeded();
     }
 
-    /*public void checkPermissions() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
-                && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            //Run-time request permission
-            ActivityCompat.requestPermissions(this, new String[]{
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-            }, MY_PERMISSION_REQUEST_CODE);
-        }
-    }*/
-
+    @SuppressLint("MissingPermission")
     private void setUpMapIfNeeded() {
 
         Log.v(TAG, "setUpMapIfNeeded() called");
         if (mMap != null) {
             Log.v(TAG, "mMap != null");
-            // Initialize map options. For example:
-            //mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+            // Initialize map options.
             mMap.getUiSettings().setZoomControlsEnabled(true);
+            mMap.getUiSettings().setCompassEnabled(true);
+            mMap.setMyLocationEnabled(true);
+            mMap.getUiSettings().setMyLocationButtonEnabled(true);
+
+            //Setting up Map Marker to current location
+            LatLng currentLocation = new LatLng(mLat, mLong);
+            mMap.addMarker(new MarkerOptions().position(currentLocation)
+                    .title("Current Location"));
             // Show current location
             if(extraSuccess)
-                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mLat, mLong), 17));
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 17));
             return;
         }
 
@@ -78,7 +118,6 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
             Log.v(TAG, "mMap == null");
             //mMap = (GoogleMap) getFragmentManager().findFragmentById(R.id.mapFrag);
         }
-
 
     }
 
@@ -116,5 +155,6 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     public void onPointerCaptureChanged(boolean hasCapture) {
 
     }
+
 }
 
