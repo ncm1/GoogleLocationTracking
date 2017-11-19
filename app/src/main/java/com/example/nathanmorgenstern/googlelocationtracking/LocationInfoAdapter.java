@@ -1,17 +1,13 @@
 package com.example.nathanmorgenstern.googlelocationtracking;
 
 import android.content.Context;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
-import android.widget.CheckBox;
 import android.widget.TextView;
 import java.util.ArrayList;
-import java.util.List;
 
-import static android.R.attr.format;
 
 public class LocationInfoAdapter extends ArrayAdapter<LocationInfo>
 {
@@ -31,11 +27,11 @@ public class LocationInfoAdapter extends ArrayAdapter<LocationInfo>
         row = layoutInflater.inflate(layoutResourceId, null);
 
         TextView lat = (TextView) row.findViewById(R.id.latitude_text);
-        String format1 = String.format("%.2f", Double.parseDouble(data.get(index).getLatitude()));
+        String format1 = String.format("%.4f", Double.parseDouble(data.get(index).getLatitude()));
         lat.setText(format1);
 
         TextView lon = (TextView) row.findViewById(R.id.longitude_text);
-        String format2 = String.format("%.2f", Double.parseDouble(data.get(index).getLongitude()));
+        String format2 = String.format("%.4f", Double.parseDouble(data.get(index).getLongitude()));
         lon.setText(format2);
 
         TextView time = (TextView) row.findViewById(R.id.time_text);

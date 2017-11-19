@@ -7,7 +7,6 @@ import android.location.Geocoder;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.ResultReceiver;
-import android.support.annotation.Nullable;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -27,6 +26,8 @@ public class GeocoderIntentService extends IntentService {
 
     private static final String TAG = "Geocoder";
     protected ResultReceiver mReceiver;
+    private String latitude;
+    private String longitude;
 
     public GeocoderIntentService() {
         super(TAG);
@@ -57,6 +58,8 @@ public class GeocoderIntentService extends IntentService {
         List<Address> addresses = null;
 
         try {
+            latitude  = Double.toString(location.getLatitude());
+            longitude = Double.toString(location.getLongitude());
             addresses = geocoder.getFromLocation(location.getLatitude(), location.getLongitude(), 1);
 
         } catch (IOException ioe) {

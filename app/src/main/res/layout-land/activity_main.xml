@@ -34,16 +34,6 @@
         android:orientation="horizontal">
 
         <Button
-            android:id="@+id/btnTrackLocation"
-            style="@android:style/Widget.Button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="15dp"
-            android:layout_weight="1"
-            android:text="Start location updates"
-            android:textAppearance="@android:style/TextAppearance" />
-
-        <Button
             android:id="@+id/btnStart"
             style="@android:style/Widget.Button"
             android:layout_width="178dp"
@@ -67,9 +57,31 @@
 
     </LinearLayout>
 
-    <ListView
-        android:id="@+id/checkInList"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="74dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnOpenList"
+            style="@android:style/Widget.Button"
+            android:layout_width="match_parent"
+            android:layout_height="59dp"
+            android:text="View Checked In Locations" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <EditText
+            android:id="@+id/checkInNameInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ems="10"
+            android:hint="Input Check In Name"
+            android:inputType="textPersonName" />
+    </LinearLayout>
 
 </LinearLayout>

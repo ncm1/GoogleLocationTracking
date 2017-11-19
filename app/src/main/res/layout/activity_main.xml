@@ -34,13 +34,13 @@
         android:orientation="horizontal">
 
         <Button
-            android:id="@+id/btnTrackLocation"
+            android:id="@+id/btnCheckIn"
             style="@android:style/Widget.Button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="15dp"
             android:layout_weight="1"
-            android:text="Start location updates"
+            android:text="Location Check In"
             android:textAppearance="@android:style/TextAppearance" />
 
         <Button
@@ -59,23 +59,34 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="63dp"
         android:orientation="horizontal">
 
         <Button
-            android:id="@+id/btnCheckIn"
+            android:id="@+id/btnOpenList"
             style="@android:style/Widget.Button"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="15dp"
             android:layout_weight="1"
-            android:text="Location Check In"
-            android:textAppearance="@android:style/TextAppearance" />
+            android:text="View Checked In Locations" />
     </LinearLayout>
 
-    <ListView
-        android:id="@+id/checkInList"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <EditText
+            android:layout_gravity="center_horizontal"
+            android:id="@+id/checkInNameInput"
+            android:fontFamily="sans-serif"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.56"
+            android:ems="10"
+            android:hint="Input Check In Name"
+            android:inputType="textPersonName"
+            android:textSize="14sp" />
+    </LinearLayout>
 
 </LinearLayout>
