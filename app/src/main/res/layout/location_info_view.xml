@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout  xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_height="match_parent"
+    android:layout_width="match_parent">
+
+    <TextView android:id="@+id/latitude_text"
+        android:layout_width="wrap_content"
+        android:layout_height="?android:attr/listPreferredItemHeight"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:textSize="14dp"
+        android:layout_weight="9786.10">
+    </TextView>
+
+    <TextView android:id="@+id/longitude_text"
+        android:layout_width="wrap_content"
+        android:layout_height="?android:attr/listPreferredItemHeight"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:textSize="14dp"
+        android:layout_weight="9786.10">
+    </TextView>
+
+    <TextView android:id="@+id/time_text"
+        android:layout_width="wrap_content"
+        android:layout_height="?android:attr/listPreferredItemHeight"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:textSize="14dp"
+        android:layout_weight="9786.10">
+    </TextView>
+
+    <TextView android:id="@+id/address_text"
+        android:layout_width="wrap_content"
+        android:layout_height="?android:attr/listPreferredItemHeight"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:textSize="14dp"
+        android:layout_weight="9786.10">
+    </TextView>
+
+    <TextView android:id="@+id/check_in_text"
+        android:layout_width="wrap_content"
+        android:layout_height="?android:attr/listPreferredItemHeight"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:textSize="14dp"
+        android:layout_weight="9786.10">
+    </TextView>
+
+</LinearLayout>
