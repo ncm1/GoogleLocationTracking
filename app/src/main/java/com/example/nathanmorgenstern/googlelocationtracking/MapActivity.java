@@ -33,6 +33,7 @@ import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 import java.text.DateFormat;
@@ -80,6 +81,9 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
 
     /* Variables used for database */
     private MySQLHelper sqlHelper;
+
+    //Helper/Utility variables
+    private Boolean onResume = false;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -131,7 +135,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
             //Setting up Map Marker to current location
             LatLng currentLocation = new LatLng(mLat, mLong);
             mMap.addMarker(new MarkerOptions().position(currentLocation)
-                    .title("Current Location"));
+                    .title("Current Location")).setDraggable(true);
             //Place markers of previous check ins
             placeMarkers();
             // Show current location
@@ -151,7 +155,8 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         //Setting up Map Marker to current location
         LatLng currentLocation = new LatLng(mLat, mLong);
         mMap.addMarker(new MarkerOptions().position(currentLocation)
-                .title("Current Location"));
+                .title("Current Location")).setDraggable(true);
+        addDraggableActionListener();
         //Place markers of previous check ins
         placeMarkers();
     }
@@ -184,6 +189,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         //code to run when the map has loaded;
         Log.v(TAG, "Map Loaded");
         setUpMapIfNeeded();
+        addDraggableActionListener();
         //placeMarkers();
     }
 
@@ -298,7 +304,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     }
 
     public String withinRadius(double lat, double lon){
-        ArrayList<LocationInfo> locationInfoList = sqlHelper.getAllLocations();
+        ArrayList<LocationInfo> locationInfoList = sqlHelper.getAllUniqueLocationCheckIns();
         int locationListSize = locationInfoList.size();
 
         Log.v(TAG, "locationInfoList.size(): " + locationListSize);
@@ -325,7 +331,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
 
     public void placeMarkers(){
 
-        ArrayList<LocationInfo> locationInfoList = sqlHelper.getAllLocations();
+        ArrayList<LocationInfo> locationInfoList = sqlHelper.getAllUniqueLocationCheckIns();
 
         Log.v(TAG, "locationInfoList.size(): " + locationInfoList.size());
         for (int i = 0; i < locationInfoList.size(); i++)
@@ -355,6 +361,100 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
 
     private void stopLocationUpdates() {
         mFusedLocationClient.removeLocationUpdates(mLocationCallback);
+    }
+
+    public void addDraggableActionListener(){
+        mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener(){
+
+            @Override
+            public void onMarkerDragStart(Marker marker) {
+
+            }
+
+            @Override
+            public void onMarkerDrag(Marker marker) {
+
+            }
+
+            @Override
+            public void onMarkerDragEnd(Marker marker) {
+
+                Double lat = marker.getPosition().latitude;
+                Double lon = marker.getPosition().longitude;
+
+                String locId = marker.getTitle();
+
+                Log.v(TAG,"lat: " + lat + " long: " + lon + "locId: " + locId);
+
+            }
+        });
+    }
+
+    /* DATABASE METHODS */
+    public void addLocationToDatabase(){
+        Log.v(TAG,"addLocationToDatabase()");
+
+        String mLat = Double.toString(mLastLatitude);
+        String mLon = Double.toString(mLastLongitude);
+        String mTim = mLastCheckInTime;
+        String mAdd = mAddressOutput;
+
+        LocationInfo tempLocation = new LocationInfo(0,mLat, mLon, mTim, mAdd);
+
+        sqlHelper.addLocationInfo(tempLocation);
+        int fk = sqlHelper.getLocationTablePrimaryKey(mLat,mLon, mTim);
+        if(!mLastCheckInName.equals("NULL")){
+
+            String tempName = withinRadius(mLastLatitude,mLastLongitude);
+            Log.v(TAG, "tempName: " + tempName);
+
+            //No name found within the radius, add the check in name
+            if(tempName.equals("No name in radius")) {
+                sqlHelper.addCheckInName(mLastCheckInName, mAddressOutput, fk);
+                int fk_checkIn = sqlHelper.getCheckInTablePrimaryKey(mLastCheckInName, mAddressOutput);
+                sqlHelper.addToNormalized(fk, fk_checkIn);
+            }
+
+            //Name/address pair are already in the table, set them accordingly
+            else if(!tempName.equals("No name in radius")){
+                String address = sqlHelper.getAddressOfCheckIn(tempName);
+                int fk_checkIn = sqlHelper.getCheckInTablePrimaryKey(tempName, address);
+                sqlHelper.addToNormalized(fk, fk_checkIn);
+            }
+        }
+        else{
+            sqlHelper.addCheckInName(" ", mAddressOutput, fk);
+            int fk_checkIn = sqlHelper.getCheckInTablePrimaryKey(" ", mAddressOutput);
+            sqlHelper.addToNormalized(fk, fk_checkIn);
+        }
+
+    }
+
+    public void updateTime(){
+        DateFormat dateFormat = new SimpleDateFormat("h:mm a");
+        Date date = new Date();
+        mLastCheckInTime = dateFormat.format(date);
+        Log.v(TAG,"mLastCheckInTime: " + mLastCheckInTime);
+    }
+
+    public void getLastLocation() {
+        Log.v(TAG,"getLastLocation()");
+        LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+
+            mLastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (mLastLocation == null) {
+                mLastLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            }
+            if (mLastLocation != null) {
+                mLastLatitude  = mLastLocation.getLatitude();
+                mLastLongitude = mLastLocation.getLongitude();
+                if(onResume) {
+                    updateLocation(mLastLocation);
+                    onResume = false;
+                }
+            }
+        }
     }
 
 }

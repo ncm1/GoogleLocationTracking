@@ -63,7 +63,7 @@ public class MainActivity extends AppCompatActivity{
     private double mCurrentLatitude = mLastLatitude;
     private double mCurrentLongitude = mLastLongitude;
     private String mLastCheckInTime = "null";
-    private String mLastCheckInName = "null";
+    private String mLastCheckInName = "NULL";
 
     /* Location request parameters */
     private static final long MIN_TIME = 0;
@@ -80,6 +80,7 @@ public class MainActivity extends AppCompatActivity{
     private Button btn_start;
     private Button btn_load_list;
     private Button btn_check_in;
+    private Button btn_tracking;
     private TextView latLongText;
     private EditText checkInName;
     private ListView checkInListView;
@@ -93,12 +94,20 @@ public class MainActivity extends AppCompatActivity{
     /* Variables used for database */
     private MySQLHelper sqlHelper;
 
+    //Helper/Utility variables
+    private Boolean onResume = false;
+    private Runnable runnable;
+    private Boolean autoCheckInMode = false;
+    private int autoCheckCounter = 1;
+    private Boolean hundredMeterMovement = false;
+    private Location capturedLocation;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        autoCheckMode();
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
         setupWidgets();
@@ -131,8 +140,25 @@ public class MainActivity extends AppCompatActivity{
         btn_start         = (Button)  findViewById(R.id.btnStart);
         btn_check_in      = (Button)  findViewById(R.id.btnCheckIn);
         btn_load_list     = (Button)  findViewById(R.id.btnOpenList);
+        btn_tracking      = (Button)  findViewById(R.id.btnTrackingMode);
         latLongText       = (TextView)findViewById(R.id.txtCoordinates);
         checkInName       = (EditText)findViewById(R.id.checkInNameInput);
+
+        btn_tracking.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                autoCheckCounter++;
+                if(autoCheckCounter % 2 == 0) {
+                    autoCheckInMode = true;
+                    btn_tracking.setText("Disable Auto Check-in");
+                    capturedLocation = mLastLocation;
+                }
+                else {
+                    autoCheckInMode = false;
+                    btn_tracking.setText("Enable Auto Check-in");
+                }
+            }
+        });
 
         btn_start.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -220,7 +246,9 @@ public class MainActivity extends AppCompatActivity{
         super.onResume();
         Log.v(TAG, "onResume()");
         if (mRequestingLocationUpdates) {
+            onResume = true;
             startLocationUpdates();
+            getLastLocation();
         }
     }
 
@@ -276,7 +304,7 @@ public class MainActivity extends AppCompatActivity{
         super.onSaveInstanceState(savedInstanceState);
     }
 
-    private class AddressResultReceiver extends ResultReceiver {
+    public class AddressResultReceiver extends ResultReceiver {
         public AddressResultReceiver(Handler handler) {
             super(handler);
         }
@@ -298,8 +326,20 @@ public class MainActivity extends AppCompatActivity{
 
     public void updateLocation(Location location){
         Log.v(TAG,"updateLocation()");
-        Log.v(TAG,"distance: " + location.distanceTo(mLastLocation));
+        //Log.v(TAG,"distance: " + location.distanceTo(mLastLocation));
         //mLastLocation = mCurrentLocation;
+
+        if(mLastLocation != null && autoCheckInMode){
+            Log.v(TAG, "location.distanceTo(capturedLocation): " + location.distanceTo(capturedLocation));
+            if( location.distanceTo(capturedLocation) > 100) {
+                Log.v(TAG, "hundredMeterMovement is greater than 100");
+                hundredMeterMovement = true;
+                capturedLocation = location; //Set a new captured location
+            }
+            else
+                hundredMeterMovement = false;
+        }
+
         mLastLocation = location;
         startIntentService();
 
@@ -333,9 +373,11 @@ public class MainActivity extends AppCompatActivity{
             if (mLastLocation != null) {
                 mLastLatitude  = mLastLocation.getLatitude();
                 mLastLongitude = mLastLocation.getLongitude();
+                if(onResume) {
+                    updateLocation(mLastLocation);
+                    onResume = false;
+                }
             }
-            else
-                Log.v(TAG, "still null");
         }
     }
 
@@ -354,10 +396,10 @@ public class MainActivity extends AppCompatActivity{
     }
 
     public String withinRadius(double lat, double lon){
-        ArrayList<LocationInfo> locationInfoList = sqlHelper.getAllLocations();
+        ArrayList<LocationInfo> locationInfoList = sqlHelper.getAllUniqueLocationCheckIns();
         int locationListSize = locationInfoList.size();
 
-        Log.v(TAG, "locationInfoList.size(): " + locationListSize);
+        Log.v(TAG, "unique locationInfoList.size(): " + locationListSize);
 
         Location loc1 = new Location("temp");
         loc1.setLatitude(lat);
@@ -467,7 +509,7 @@ public class MainActivity extends AppCompatActivity{
         LocationInfo tempLocation = new LocationInfo(0,mLat, mLon, mTim, mAdd);
 
         sqlHelper.addLocationInfo(tempLocation);
-        int fk = sqlHelper.getLocationTablePrimaryKey(mTim);
+        int fk = sqlHelper.getLocationTablePrimaryKey(mLat,mLon, mTim);
         if(!mLastCheckInName.equals("NULL")){
 
             String tempName = withinRadius(mLastLatitude,mLastLongitude);
@@ -475,26 +517,82 @@ public class MainActivity extends AppCompatActivity{
 
             //No name found within the radius, add the check in name
             if(tempName.equals("No name in radius")) {
-                sqlHelper.addCheckInName(mLastCheckInName, mAddressOutput);
+                sqlHelper.addCheckInName(mLastCheckInName, mAddressOutput, fk);
                 int fk_checkIn = sqlHelper.getCheckInTablePrimaryKey(mLastCheckInName, mAddressOutput);
                 sqlHelper.addToNormalized(fk, fk_checkIn);
             }
 
             //Name/address pair are already in the table, set them accordingly
             else if(!tempName.equals("No name in radius")){
-                String address = sqlHelper.getAddressOfCheckIn(tempName);
-                int fk_checkIn = sqlHelper.getCheckInTablePrimaryKey(tempName, address);
+                Log.v(TAG, "tempName: " + tempName + " fk: " + fk);
+                Log.v(TAG, "address: " + mAddressOutput);
+                int fk_checkIn = sqlHelper.getCheckInTablePrimaryKey(tempName, mAddressOutput);
                 sqlHelper.addToNormalized(fk, fk_checkIn);
             }
         }
         else{
-            sqlHelper.addCheckInName(" ", mAddressOutput);
-            int fk_checkIn = sqlHelper.getCheckInTablePrimaryKey(" ", mAddressOutput);
+            sqlHelper.addCheckInName("", mAddressOutput, fk);
+            int fk_checkIn = sqlHelper.getCheckInTablePrimaryKey("", mAddressOutput);
             sqlHelper.addToNormalized(fk, fk_checkIn);
         }
 
     }
 
+    /* Background task that automatically checks in after 5 minutes, or the user
+       has moved 100m or more */
+
+    public void autoCheckMode(){
+        final Handler handler = new Handler();
+        final Handler handler2 = new Handler();
+        final int delay = 1000 * 60 * 5; //milliseconds->minutes -> 5 minutes
+        final Runnable runnable1;
+
+        handler.postDelayed(new Runnable(){
+            public void run(){
+                //do something
+                Log.v(TAG, "Hey i'm running here");
+                if(autoCheckInMode) {
+                    Log.v(TAG, "autoCheckInMode == true");
+                    runnable = this;
+                    handler.postDelayed(runnable, delay);
+                    getLastLocation();
+                    updateTime();
+                    updateCheckInName();
+                    addLocationToDatabase();
+                }
+                else {
+                    Log.v(TAG, "autoCheckInMode == false");
+                    runnable = this;
+                    handler.postDelayed(runnable, delay);
+                }
+
+            }
+        }, delay);
+
+        final int delay2 = 1000*70; //check every 70 seconds for 100m movement
+        handler2.postDelayed(new Runnable(){
+            public void run(){
+                //do something
+                if(autoCheckInMode && hundredMeterMovement) {
+                    Log.v(TAG, "hundredMeterMovement detected");
+                    Runnable runnable1 = this;
+                    handler.postDelayed(runnable1, delay2);
+                    getLastLocation();
+                    updateTime();
+                    updateCheckInName();
+                    addLocationToDatabase();
+                    hundredMeterMovement = false;
+
+                }
+                else{
+                    Log.v(TAG, "I'm running, no movement detected");
+                    runnable = this;
+                    handler.postDelayed(runnable, delay);
+               }
+            }
+        }, delay2);
+
+    }
 
 
     /* END DATABASE METHODS*/

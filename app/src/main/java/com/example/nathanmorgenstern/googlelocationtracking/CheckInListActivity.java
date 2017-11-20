@@ -175,7 +175,7 @@ public class CheckInListActivity extends AppCompatActivity {
     }
 
     public String withinRadius(double lat, double lon){
-        ArrayList<LocationInfo> locationInfoList = sqlHelper.getAllLocations();
+        ArrayList<LocationInfo> locationInfoList = sqlHelper.getAllUniqueLocationCheckIns();
         int locationListSize = locationInfoList.size();
 
 
@@ -204,6 +204,12 @@ public class CheckInListActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         stopLocationUpdates();
+    }
+
+    @Override
+    protected void onResume(){
+        super.onResume();
+        updateListView();
     }
 
     private void stopLocationUpdates() {
