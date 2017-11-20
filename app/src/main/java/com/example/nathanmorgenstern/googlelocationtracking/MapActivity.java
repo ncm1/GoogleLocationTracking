@@ -1,6 +1,8 @@
 package com.example.nathanmorgenstern.googlelocationtracking;
 
 import android.annotation.SuppressLint;
+import android.app.Dialog;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -13,8 +15,11 @@ import android.os.ResultReceiver;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
 
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -26,8 +31,14 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
 
 
 public class MapActivity extends FragmentActivity implements OnMapReadyCallback, GoogleMap.OnMapLoadedCallback {
@@ -40,9 +51,19 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     private LocationCallback mLocationCallback;
     private Boolean mRequestingLocationUpdates = false;
 
-    private LocationRequest mLocationRequest;
+
+    /*Variables for storing location data */
     private Location mLastLocation;
+    private Location mCurrentLocation;
+    private LocationRequest mLocationRequest;
     private GoogleApiClient mGoogleApiClient;
+    private double mLastLatitude  = -111.0;
+    private double mLastLongitude = -111.0;
+    private double mCurrentLatitude = mLastLatitude;
+    private double mCurrentLongitude = mLastLongitude;
+    private String mLastCheckInTime = "null";
+    private String mLastCheckInName = "null";
+
 
     private static final String TAG = "MAP_ACTIVITY";
     private static final int MY_PERMISSION_REQUEST_CODE = 7171;
@@ -55,22 +76,25 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     private String mAddressOutput;
     private String mNewLatitude;
     private String mNewLongitude;
+    private Dialog dialog = null;
+
+    /* Variables used for database */
+    private MySQLHelper sqlHelper;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_map);
 
-
-        /*
         requestPermissions();
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+
+        sqlHelper = new MySQLHelper(this);
         defineLocationRequest();
         defineLocationCallback();
+        mRequestingLocationUpdates = true;
         //TODO: add boolean variable to indicate if "tracking mode" is on or off
         startLocationUpdates();
-        */
-
 
         Intent intent = getIntent();
         mLat = intent.getDoubleExtra("mLatitude", -500);
@@ -108,6 +132,8 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
             LatLng currentLocation = new LatLng(mLat, mLong);
             mMap.addMarker(new MarkerOptions().position(currentLocation)
                     .title("Current Location"));
+            //Place markers of previous check ins
+            placeMarkers();
             // Show current location
             if(extraSuccess)
                 mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 17));
@@ -119,6 +145,15 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
             //mMap = (GoogleMap) getFragmentManager().findFragmentById(R.id.mapFrag);
         }
 
+    }
+
+    public void updateMap(){
+        //Setting up Map Marker to current location
+        LatLng currentLocation = new LatLng(mLat, mLong);
+        mMap.addMarker(new MarkerOptions().position(currentLocation)
+                .title("Current Location"));
+        //Place markers of previous check ins
+        placeMarkers();
     }
 
     /* ACTIVITY LIFE CYCLE METHODS */
@@ -149,11 +184,177 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         //code to run when the map has loaded;
         Log.v(TAG, "Map Loaded");
         setUpMapIfNeeded();
+        //placeMarkers();
     }
 
     @Override
     public void onPointerCaptureChanged(boolean hasCapture) {
 
+    }
+
+    /* LOCATION METHODS  */
+
+    public void updateLocation(Location location){
+
+        //mLastLocation = mCurrentLocation;
+        mLastLocation = location;
+
+        mLastLatitude  = location.getLatitude();
+        mLastLongitude = location.getLongitude();
+
+        String tempName = withinRadius(mLastLatitude,mLastLongitude);
+        Log.v(TAG, "updateLocation()->tempName: " + tempName);
+
+        if(!tempName.equals("No name in radius")) {
+            String time = sqlHelper.getLastCheckInTimeForLocation(tempName);
+            if(!time.equals("none found")) {
+                showDialog(tempName, time);
+            }
+            else if(dialog != null)
+                dialog.dismiss();
+        }
+        else if(dialog != null)
+            dialog.dismiss();
+        //updateText();
+    }
+
+    public void defineLocationCallback(){
+        mLocationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                Location tempLocation = null;
+                for (Location location : locationResult.getLocations()) {
+                    // Update UI with location data
+                    // ...
+                    tempLocation = location;
+                }
+                Log.v(TAG, "new location");
+                updateLocation(tempLocation);
+                updateMap();
+            };
+        };
+    }
+
+    public void defineLocationRequest(){
+        mLocationRequest = new LocationRequest();
+        mLocationRequest.setInterval(1000);
+        mLocationRequest.setFastestInterval(500);
+        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+    }
+
+    public void requestPermissions() {
+        Log.v(TAG, "requestPermissions()");
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                || ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+            //Run-time request permission
+            ActivityCompat.requestPermissions(this, new String[]{
+                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION
+            }, MY_PERMISSION_REQUEST_CODE);
+        }
+    }
+
+    public void startLocationUpdates(){
+        if(mFusedLocationClient != null) {
+            Log.v(TAG, "mFusedLocationClient != null");
+            mFusedLocationClient.requestLocationUpdates(mLocationRequest,
+                    mLocationCallback,
+                    null /* Looper */);
+
+        }
+        else
+            Log.v(TAG, "mFusedLocationClient == null");
+    }
+
+    public void showDialog(String name, String time){
+        // custom dialog
+        if(dialog != null)
+            dialog.dismiss();
+
+        dialog = new Dialog(this);
+        dialog.setContentView(R.layout.simple_text_view);
+        dialog.setTitle("Title...");
+
+        // set the custom dialog components - text, image and button
+        TextView check_in_name = (TextView) dialog.findViewById(R.id.locationCheckInName);
+        check_in_name.setText("Check in name: " + name);
+        TextView check_in_time = (TextView) dialog.findViewById(R.id.locationCheckInTime);
+        check_in_time.setText("Check in time: " + time);
+
+        Button dialogButton = (Button) dialog.findViewById(R.id.btnOkDialog);
+        // if button is clicked, close the custom dialog
+        dialogButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if(dialog != null)
+                    dialog.dismiss();
+                //dialog = null;
+            }
+        });
+
+        if(dialog != null)
+            dialog.show();
+    }
+
+    public String withinRadius(double lat, double lon){
+        ArrayList<LocationInfo> locationInfoList = sqlHelper.getAllLocations();
+        int locationListSize = locationInfoList.size();
+
+        Log.v(TAG, "locationInfoList.size(): " + locationListSize);
+
+        Location loc1 = new Location("temp");
+        loc1.setLatitude(lat);
+        loc1.setLongitude(lon);
+
+        double dist = 0.0;
+        for(int i = 0; i < locationListSize; i++){
+            Location loc2 = new Location("temp");
+            loc2.setLatitude(Double.parseDouble(locationInfoList.get(i).getLatitude()));
+            loc2.setLongitude(Double.parseDouble(locationInfoList.get(i).getLongitude()));
+            dist = loc1.distanceTo(loc2);
+
+            if(dist <= 30.0) {
+                Log.v(TAG, "dist: " + dist + "m");
+                return locationInfoList.get(i).getCheckInName();
+            }
+        }
+
+        return "No name in radius";
+    }
+
+    public void placeMarkers(){
+
+        ArrayList<LocationInfo> locationInfoList = sqlHelper.getAllLocations();
+
+        Log.v(TAG, "locationInfoList.size(): " + locationInfoList.size());
+        for (int i = 0; i < locationInfoList.size(); i++)
+        {
+            String locationName = locationInfoList.get(i).getCheckInName();
+
+            LatLng tempLatLng = new LatLng(Double.parseDouble(locationInfoList.get(i).getLatitude()),
+                    Double.parseDouble(locationInfoList.get(i).getLongitude()));
+
+            Log.v(TAG, "locationInfoList.get().getName(): " + locationName);
+            Log.v(TAG, "latitude: " + Double.parseDouble(locationInfoList.get(i).getLatitude()));
+            Log.v(TAG, "longitude: " + Double.parseDouble(locationInfoList.get(i).getLongitude()));
+            mMap.addMarker(new MarkerOptions()
+                    .position(tempLatLng)
+                    .title(locationName)
+                    .icon(BitmapDescriptorFactory.fromResource(R.drawable.measle_blue))
+            );
+        }
+    }
+    /* END LOCATION METHODS */
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        stopLocationUpdates();
+    }
+
+    private void stopLocationUpdates() {
+        mFusedLocationClient.removeLocationUpdates(mLocationCallback);
     }
 
 }

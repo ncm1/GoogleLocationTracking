@@ -8,10 +8,6 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
 import java.util.ArrayList;
 
-import static android.R.attr.id;
-import static android.R.attr.key;
-import static android.R.attr.name;
-import static android.provider.Contacts.SettingsColumns.KEY;
 
 
 public class MySQLHelper extends SQLiteOpenHelper {
@@ -41,10 +37,36 @@ public class MySQLHelper extends SQLiteOpenHelper {
     private static final String[] CHECK_IN_COLUMNS   = {KEY_CHECK_IN_NAME};
     private static final String[] NORMALIZED_COLUMNS = {KEY_LOCATION_ID, KEY_LOCATION_ID};
 
+    //Private variables for initializing locations
+    private static final String location1 = "Study spot";
+    private static final String location1_address = "Bartholomew Rd\n Piscataway Township\n NJ 08854";
+    private static final String loc1_lat = "40.52433664449722";
+    private static final String loc1_lon = "-74.45861577987671";
+
+    private static final String location2 = "Bike";
+    private static final String location2_address = "Titsworth Pl\n Piscataway Township\n NJ 08854";
+    private static final String loc2_lat = "40.52662";
+    private static final String loc2_lon = "-74.461641";
+
+    private static final String location3 = "Chem recitation";
+    private static final String location3_address = "110 Frelinghuysen Rd \nPiscataway Township\n NJ 08854";
+    private static final String loc3_lat = "40.521417";
+    private static final String loc3_lon = "-74.4631";
+
+    private static final String location4 = "Wallet Seed";
+    private static final String location4_address = "183-199 Bevier Rd\n Piscataway Township\n NJ 08854";
+    private static final String loc4_lat = "40.525201";
+    private static final String loc4_lon = "-74.463723";
+
+    private static final String location5 = "First integral";
+    private static final String location5_address = "720 Davidson Rd\n Piscataway Township\n NJ 08854";
+    private static final String loc5_lat = "40.528202";
+    private static final String loc5_lon = " -74.465375";
+
     // Database Version
     private static final int DATABASE_VERSION = 1;
     // Database Name
-    private static final String DATABASE_NAME = "tracking_db_v2";
+    private static final String DATABASE_NAME = "tracking_db_v7_test";
 
     //For table creation queries
     // SQL statement to create Table Location Info
@@ -71,10 +93,11 @@ public class MySQLHelper extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-
+        Log.v(SQL_DEBUGGER, "onCreate() database...");
         db.execSQL(CREATE_LOCATION_INFO_TABLE);
         db.execSQL(CREATE_CHECK_IN_TABLE);
         db.execSQL(CREATE_NORMALIZED_TABLE);
+        initializeDatabase(db);
         //db.close();
     }
 
@@ -83,11 +106,10 @@ public class MySQLHelper extends SQLiteOpenHelper {
         // Drop older tables if they exist
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_CHECK_IN);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_LOCATION_INFO);
-        //db.execSQL("DROP TABLE IF EXISTS " + TABLE_NORMALIZED);
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_NORMALIZED);
         // create fresh table
         onCreate(db);
     }
-
 
 
     /* SQL TABLE LOCATION HELPER METHODS */
@@ -229,7 +251,6 @@ public class MySQLHelper extends SQLiteOpenHelper {
         return temp;
     }
 
-
     /* END LOCATION */
 
     /* SQL CHECK IN HELPER METHODS */
@@ -292,7 +313,6 @@ public class MySQLHelper extends SQLiteOpenHelper {
 
     /* END CHECK IN METHODS */
 
-
     /* Normalized Table Helper Methods */
 
     public void addToNormalized(int fk_location_info, int fk_check_in){
@@ -326,7 +346,6 @@ public class MySQLHelper extends SQLiteOpenHelper {
 
 
 
-
         SQLiteDatabase db = this.getWritableDatabase();
         Cursor cursor = db.rawQuery(selectQuery, null);
 
@@ -344,6 +363,139 @@ public class MySQLHelper extends SQLiteOpenHelper {
         db.close();
         // return contact list
         return temp_time;
+    }
+
+    /* Initialization methods of dB */
+    public void initializeDatabase(SQLiteDatabase db){
+
+        String mTime = "-------";
+
+        LocationInfo l1 = new LocationInfo(0,loc1_lat,loc1_lon, mTime, location1_address);
+        l1.setCheckInName(location1);
+
+        LocationInfo l2 = new LocationInfo(0,loc2_lat,loc2_lon, mTime, location2_address);
+        l2.setCheckInName(location2);
+
+        LocationInfo l3 = new LocationInfo(0,loc3_lat,loc3_lon, mTime, location3_address);
+        l3.setCheckInName(location3);
+
+        LocationInfo l4 = new LocationInfo(0,loc4_lat,loc4_lon, mTime, location4_address);
+        l4.setCheckInName(location4);
+
+        LocationInfo l5 = new LocationInfo(0,loc5_lat,loc5_lon, mTime, location5_address);
+        l5.setCheckInName(location5);
+
+        LocationInfo[] loc_info_array = {l1,l2,l3,l4,l5};
+
+        int fk = 0;
+        int fk_checkIn = 0;
+
+        for(int i = 0; i < 5; i ++){
+            addLocationInfo(loc_info_array[i], db);
+            addCheckInName(loc_info_array[i].getCheckInName(), loc_info_array[i].getAddress(), db);
+            fk         = getLocationTablePrimaryKey(loc_info_array[i].getTime(), db);
+            fk_checkIn = getCheckInTablePrimaryKey(loc_info_array[i].getCheckInName(), loc_info_array[i].getAddress(), db);
+            addToNormalized(fk,fk_checkIn, db);
+        }
+
+        //db.close();
+    }
+
+    public void addLocationInfo(LocationInfo loc_info, SQLiteDatabase db){
+        // 1. get reference to writable DB
+        //db = this.getWritableDatabase();
+        // 2. create ContentValues to add key "column"/value
+        ContentValues values = new ContentValues();
+
+        values.put(KEY_LATITUDE,  loc_info.getLatitude());
+        values.put(KEY_LONGITUDE, loc_info.getLongitude());
+        values.put(KEY_TIME,      loc_info.getTime());
+
+        Log.v(SQL_DEBUGGER, "latitude: "   + loc_info.getLatitude());
+        Log.v(SQL_DEBUGGER, "longitude: "  + loc_info.getLongitude());
+        Log.v(SQL_DEBUGGER, "time: "       + loc_info.getTime());
+
+        // 3. insert
+        db.insert(TABLE_LOCATION_INFO, // table
+                null, //nullColumnHack
+                values); // key/value -> keys = column names/ values = column values
+
+        // 4. close
+        //db.close();
+    }
+
+    public void addToNormalized(int fk_location_info, int fk_check_in,SQLiteDatabase db){
+        // 1. get reference to writable DB
+        //db = this.getWritableDatabase();
+        // 2. create ContentValues to add key "column"/value
+        ContentValues values = new ContentValues();
+
+        values.put(KEY_LOCATION_ID,  fk_location_info);
+        values.put(KEY_CHECK_IN_ID, fk_check_in);
+
+
+        // 3. insert
+        db.insert(TABLE_NORMALIZED, // table
+                null, //nullColumnHack
+                values); // key/value -> keys = column names/ values = column values
+        // 4. close
+        //db.close();
+    }
+
+    public void addCheckInName(String checkInName, String address, SQLiteDatabase db){
+        // 1. get reference to writable DB
+        //db = this.getWritableDatabase();
+        // 2. create ContentValues to add key "column"/value
+        ContentValues values = new ContentValues();
+
+        values.put(KEY_CHECK_IN_NAME, checkInName);
+        values.put(KEY_ADDRESS,address);
+
+        // 3. insert
+        db.insert(TABLE_CHECK_IN, // table
+                null, //nullColumnHack
+                values); // key/value -> keys = column names/ values = column values
+        // 4. close
+        //db.close();
+    }
+
+    public int getLocationTablePrimaryKey(String time, SQLiteDatabase db){
+        //db = this.getReadableDatabase();
+
+        String strQuery = "SELECT " + KEY_ID + " FROM " + TABLE_LOCATION_INFO + " WHERE time=?";
+        Cursor cursor = db.rawQuery(strQuery, new String[] {time},null);
+        Log.v(SQL_DEBUGGER, "Cursor initialized in getLocationTablePrimaryKey()");
+
+        int key = -1;
+        if (cursor != null) {
+            cursor.moveToFirst();
+            key = cursor.getInt(0);
+            Log.v(SQL_DEBUGGER, "key " + key);
+        }
+
+        //db.close();
+        cursor.close();
+        // return contact list
+        return key;
+    }
+
+    public int getCheckInTablePrimaryKey(String checkInName, String address, SQLiteDatabase db){
+        //db = this.getReadableDatabase();
+
+        String strQuery = "SELECT " + KEY_ID + " FROM " + TABLE_CHECK_IN + " WHERE check_in_name=? AND address=?";
+        Cursor cursor = db.rawQuery(strQuery, new String[] {checkInName,address},null);
+        Log.v(SQL_DEBUGGER, "Cursor initialized");
+
+        int key = -1;
+        if (cursor != null) {
+            cursor.moveToFirst();
+            key = cursor.getInt(0);
+        }
+
+        //db.close();
+        cursor.close();
+        // return contact list
+        return key;
     }
 
 
