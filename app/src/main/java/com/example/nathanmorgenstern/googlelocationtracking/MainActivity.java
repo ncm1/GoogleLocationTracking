@@ -107,6 +107,7 @@ public class MainActivity extends AppCompatActivity{
         getLastLocation();
         defineLocationCallback();
         defineLocationRequest();
+        mRequestingLocationUpdates = true;
         startLocationUpdates();
 
         mResultReceiver = new AddressResultReceiver(new Handler());
@@ -229,6 +230,16 @@ public class MainActivity extends AppCompatActivity{
         Log.v(TAG, "onStart()");
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        stopLocationUpdates();
+    }
+
+    private void stopLocationUpdates() {
+        mFusedLocationClient.removeLocationUpdates(mLocationCallback);
+    }
+
     /* END ACTIVITY LIFE CYCLE METHODS */
 
 
@@ -284,30 +295,6 @@ public class MainActivity extends AppCompatActivity{
 
 
     /* LOCATION METHODS  */
-    private void fetchAddressButtonHandler() {
-        mFusedLocationClient.getLastLocation()
-                .addOnSuccessListener(this, new OnSuccessListener<Location>() {
-                    @Override
-                    public void onSuccess(Location location) {
-                        Location mLastKnownLocation = location;
-
-                        // In some rare cases the location returned can be null
-                        if (mLastKnownLocation == null) {
-                            return;
-                        }
-
-                        if (!Geocoder.isPresent()) {
-                            Log.v(TAG,"Geocoder is not present");
-                            return;
-                        }
-
-                        // Start service and update UI to reflect new location
-                        startIntentService();
-                        //updateUI();
-                        Log.v(TAG,"mAddressOutput: " + mAddressOutput);
-                    }
-                });
-    }
 
     public void updateLocation(Location location){
         Log.v(TAG,"updateLocation()");
@@ -397,8 +384,10 @@ public class MainActivity extends AppCompatActivity{
     /* UI METHODS */
 
     public void showDialog(String name, String time){
-        Log.v(TAG, "showDialogCalled()");
         // custom dialog
+        if(dialog != null)
+            dialog.dismiss();
+
         dialog = new Dialog(this);
         dialog.setContentView(R.layout.simple_text_view);
         dialog.setTitle("Title...");
@@ -414,8 +403,9 @@ public class MainActivity extends AppCompatActivity{
         dialogButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                dialog.dismiss();
-                dialog = null;
+                if(dialog != null)
+                    dialog.dismiss();
+                //dialog = null;
             }
         });
 
@@ -433,7 +423,6 @@ public class MainActivity extends AppCompatActivity{
 
     public void startLocationUpdates(){
         if(mFusedLocationClient != null) {
-            Log.v(TAG, "mFusedLocationClient != null");
             mFusedLocationClient.requestLocationUpdates(mLocationRequest,
                     mLocationCallback,
                     null /* Looper */);
