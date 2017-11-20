@@ -66,7 +66,7 @@ public class MySQLHelper extends SQLiteOpenHelper {
     // Database Version
     private static final int DATABASE_VERSION = 1;
     // Database Name
-    private static final String DATABASE_NAME = "tracking_db_v7_test";
+    private static final String DATABASE_NAME = "tracking_db_v62_test";
 
     //For table creation queries
     // SQL statement to create Table Location Info
@@ -79,7 +79,8 @@ public class MySQLHelper extends SQLiteOpenHelper {
     private String CREATE_CHECK_IN_TABLE = "CREATE TABLE " +  TABLE_CHECK_IN +  " (" +
             KEY_ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
             KEY_CHECK_IN_NAME + " TEXT," +
-            KEY_ADDRESS       + " TEXT)";
+            KEY_ADDRESS       + " TEXT," +
+            KEY_LOCATION_ID   + " INTEGER)";
 
     private String CREATE_NORMALIZED_TABLE = "CREATE TABLE " + TABLE_NORMALIZED + "("
             + KEY_ID + " INTEGER PRIMARY KEY,"
@@ -114,11 +115,12 @@ public class MySQLHelper extends SQLiteOpenHelper {
 
     /* SQL TABLE LOCATION HELPER METHODS */
 
-    public int getLocationTablePrimaryKey(String time){
+    public int getLocationTablePrimaryKey(String lat, String lon, String time){
         SQLiteDatabase db = this.getReadableDatabase();
 
-        String strQuery = "SELECT " + KEY_ID + " FROM " + TABLE_LOCATION_INFO + " WHERE time=?";
-        Cursor cursor = db.rawQuery(strQuery, new String[] {time},null);
+        String strQuery = "SELECT " + KEY_ID + " FROM " + TABLE_LOCATION_INFO + " WHERE latitude=? AND longitude=? AND time=?";
+        Cursor cursor = db.rawQuery(strQuery, new String[] {lat,lon,time},null);
+
         Log.v(SQL_DEBUGGER, "Cursor initialized in getLocationTablePrimaryKey()");
 
         int key = -1;
@@ -157,7 +159,7 @@ public class MySQLHelper extends SQLiteOpenHelper {
         db.close();
     }
 
-    // Getting All Location Check ins
+    // Getting All Location Check ins for the list
     public ArrayList<LocationInfo> getAllLocations() {
 
         Log.v(SQL_DEBUGGER, "getAllLocations()");
@@ -165,10 +167,65 @@ public class MySQLHelper extends SQLiteOpenHelper {
 
         // Select All Query
         String selectQuery = "SELECT  * FROM " + TABLE_LOCATION_INFO + " tbl_location, " +
-                TABLE_CHECK_IN + " tbl_check, " + TABLE_NORMALIZED + " tbl_norm " +
+                                                 TABLE_CHECK_IN      + " tbl_check, "    +
+                                                 TABLE_NORMALIZED    + " tbl_norm "      +
                 "WHERE" +
                 " tbl_norm." + KEY_LOCATION_ID  + " = tbl_location." + KEY_ID +
                 " AND tbl_norm." + KEY_CHECK_IN_ID  + " = tbl_check." + KEY_ID;
+
+
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery(selectQuery, null);
+
+        int    temp_id;
+        String temp_lat;
+        String temp_long;
+        String temp_time;
+        String temp_address;
+        String temp_check_in;
+
+        // looping through all rows and adding to list
+        if (cursor.moveToFirst()) {
+            do {
+
+                temp_id       = cursor.getColumnIndex(KEY_ID);
+                temp_check_in =  cursor.getString(cursor.getColumnIndex(KEY_CHECK_IN_NAME));
+                temp_lat      =  cursor.getString(cursor.getColumnIndex(KEY_LATITUDE));
+                temp_long     =  cursor.getString(cursor.getColumnIndex(KEY_LONGITUDE));
+                temp_time     =  cursor.getString(cursor.getColumnIndex(KEY_TIME));
+                temp_address  = cursor.getString(cursor.getColumnIndex(KEY_ADDRESS));
+                LocationInfo temp_location_info = new LocationInfo(temp_id,temp_lat,temp_long,temp_time,temp_address);
+
+                Log.v(SQL_DEBUGGER, "temp_check_in: " + temp_check_in);
+                Log.v(SQL_DEBUGGER, "temp_lat: "      + temp_lat);
+                Log.v(SQL_DEBUGGER, "temp_long: "     + temp_long);
+                Log.v(SQL_DEBUGGER, "temp_time: "     + temp_time);
+                Log.v(SQL_DEBUGGER, "temp_address: "  + temp_address);
+
+                if(!temp_check_in.equals("No check in found"))
+                    temp_location_info.setCheckInName(temp_check_in);
+                locationInfoList.add(temp_location_info);
+            } while (cursor.moveToNext());
+        }
+        db.close();
+        // return contact list
+        return locationInfoList;
+    }
+
+    //Getting All location Check ins for the map
+    public ArrayList<LocationInfo> getAllUniqueLocationCheckIns() {
+
+        Log.v(SQL_DEBUGGER, "getAllLocations()");
+        ArrayList<LocationInfo> locationInfoList = new ArrayList<LocationInfo>();
+
+        // Select All Query
+        String selectQuery = "SELECT  * FROM " + TABLE_LOCATION_INFO + " tbl_location, " +
+                TABLE_CHECK_IN      + " tbl_check, "    +
+                TABLE_NORMALIZED    + " tbl_norm "      +
+                "WHERE" +
+                " tbl_norm." + KEY_LOCATION_ID      + " = tbl_location." + KEY_ID +
+                " AND tbl_norm." + KEY_CHECK_IN_ID  + " = tbl_check." + KEY_ID    +
+                " AND tbl_check."+ KEY_LOCATION_ID  + " = tbl_location." + KEY_ID;
 
 
         SQLiteDatabase db = this.getReadableDatabase();
@@ -251,6 +308,30 @@ public class MySQLHelper extends SQLiteOpenHelper {
         return temp;
     }
 
+    public String getAddressOfCheckIn(String checkInName, int loc_id){
+        // Select All Query
+        String selectQuery = "SELECT  " + KEY_ADDRESS + " FROM " + TABLE_CHECK_IN +
+                " WHERE " + KEY_CHECK_IN_NAME + "=? AND " + KEY_LOCATION_ID + "=?";
+
+
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery(selectQuery, new String[]{checkInName, Integer.toString(loc_id)}, null);
+
+        String  temp = "none found";
+
+        // looping through all rows and adding to list
+        if (cursor.moveToFirst()) {
+            do {
+                cursor.moveToFirst();
+                temp = cursor.getString(0);
+                Log.v(SQL_DEBUGGER, "temp: "     + temp);
+            } while (cursor.moveToNext());
+        }
+        db.close();
+        // return contact list
+        return temp;
+    }
+
     /* END LOCATION */
 
     /* SQL CHECK IN HELPER METHODS */
@@ -274,7 +355,7 @@ public class MySQLHelper extends SQLiteOpenHelper {
         return key;
     }
 
-    public void addCheckInName(String checkInName, String address){
+    public void addCheckInName(String checkInName, String address, int temp_id){
         // 1. get reference to writable DB
         SQLiteDatabase db = this.getWritableDatabase();
         // 2. create ContentValues to add key "column"/value
@@ -282,6 +363,7 @@ public class MySQLHelper extends SQLiteOpenHelper {
 
         values.put(KEY_CHECK_IN_NAME, checkInName);
         values.put(KEY_ADDRESS,address);
+        values.put(KEY_LOCATION_ID, temp_id);
 
         // 3. insert
         db.insert(TABLE_CHECK_IN, // table
@@ -385,16 +467,26 @@ public class MySQLHelper extends SQLiteOpenHelper {
         LocationInfo l5 = new LocationInfo(0,loc5_lat,loc5_lon, mTime, location5_address);
         l5.setCheckInName(location5);
 
-        LocationInfo[] loc_info_array = {l1,l2,l3,l4,l5};
+        ArrayList<LocationInfo> loc_info_array = new ArrayList<LocationInfo>();
+        loc_info_array.add(l1);
+        loc_info_array.add(l2);
+        loc_info_array.add(l3);
+        loc_info_array.add(l4);
+        loc_info_array.add(l5);
 
         int fk = 0;
         int fk_checkIn = 0;
 
         for(int i = 0; i < 5; i ++){
-            addLocationInfo(loc_info_array[i], db);
-            addCheckInName(loc_info_array[i].getCheckInName(), loc_info_array[i].getAddress(), db);
-            fk         = getLocationTablePrimaryKey(loc_info_array[i].getTime(), db);
-            fk_checkIn = getCheckInTablePrimaryKey(loc_info_array[i].getCheckInName(), loc_info_array[i].getAddress(), db);
+            addLocationInfo(loc_info_array.get(i), db);
+
+            //Foreign key for checkInName table
+            fk         = getLocationTablePrimaryKey(loc_info_array.get(i).getLatitude(),loc_info_array.get(i).getLongitude(), db);
+            addCheckInName(loc_info_array.get(i).getCheckInName(), loc_info_array.get(i).getAddress(),fk, db);
+
+            //Foreign key to be used in normalized table
+            fk_checkIn = getCheckInTablePrimaryKey(loc_info_array.get(i).getCheckInName(),
+                                                   loc_info_array.get(i).getAddress(), db);
             addToNormalized(fk,fk_checkIn, db);
         }
 
@@ -402,9 +494,7 @@ public class MySQLHelper extends SQLiteOpenHelper {
     }
 
     public void addLocationInfo(LocationInfo loc_info, SQLiteDatabase db){
-        // 1. get reference to writable DB
-        //db = this.getWritableDatabase();
-        // 2. create ContentValues to add key "column"/value
+
         ContentValues values = new ContentValues();
 
         values.put(KEY_LATITUDE,  loc_info.getLatitude());
@@ -420,8 +510,6 @@ public class MySQLHelper extends SQLiteOpenHelper {
                 null, //nullColumnHack
                 values); // key/value -> keys = column names/ values = column values
 
-        // 4. close
-        //db.close();
     }
 
     public void addToNormalized(int fk_location_info, int fk_check_in,SQLiteDatabase db){
@@ -442,14 +530,14 @@ public class MySQLHelper extends SQLiteOpenHelper {
         //db.close();
     }
 
-    public void addCheckInName(String checkInName, String address, SQLiteDatabase db){
-        // 1. get reference to writable DB
-        //db = this.getWritableDatabase();
-        // 2. create ContentValues to add key "column"/value
+    public void addCheckInName(String checkInName, String address, int temp_id, SQLiteDatabase db){
+
         ContentValues values = new ContentValues();
 
         values.put(KEY_CHECK_IN_NAME, checkInName);
         values.put(KEY_ADDRESS,address);
+        values.put(KEY_LOCATION_ID,temp_id);
+
 
         // 3. insert
         db.insert(TABLE_CHECK_IN, // table
@@ -459,11 +547,11 @@ public class MySQLHelper extends SQLiteOpenHelper {
         //db.close();
     }
 
-    public int getLocationTablePrimaryKey(String time, SQLiteDatabase db){
-        //db = this.getReadableDatabase();
+    public int getLocationTablePrimaryKey(String lat, String lon, SQLiteDatabase db){
 
-        String strQuery = "SELECT " + KEY_ID + " FROM " + TABLE_LOCATION_INFO + " WHERE time=?";
-        Cursor cursor = db.rawQuery(strQuery, new String[] {time},null);
+        String strQuery = "SELECT " + KEY_ID + " FROM " + TABLE_LOCATION_INFO + " WHERE latitude=? AND longitude=?";
+        Cursor cursor = db.rawQuery(strQuery, new String[] {lat,lon},null);
+
         Log.v(SQL_DEBUGGER, "Cursor initialized in getLocationTablePrimaryKey()");
 
         int key = -1;

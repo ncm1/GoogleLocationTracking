@@ -53,6 +53,24 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal">
 
+        <EditText
+            android:id="@+id/checkInNameInput"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_weight="0.56"
+            android:ems="10"
+            android:fontFamily="sans-serif"
+            android:hint="Input Check In Name"
+            android:inputType="textPersonName"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
         <Button
             android:id="@+id/btnCheckIn"
             style="@android:style/Widget.Button"
@@ -85,28 +103,18 @@
         <Button
             android:id="@+id/btnOpenList"
             style="@android:style/Widget.Button"
-            android:layout_width="wrap_content"
+            android:layout_width="154dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="View Checked In Locations" />
-    </LinearLayout>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <EditText
-            android:layout_gravity="center_horizontal"
-            android:id="@+id/checkInNameInput"
-            android:fontFamily="sans-serif"
+        <Button
+            android:id="@+id/btnTrackingMode"
+            style="@android:style/Widget.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="0.56"
-            android:ems="10"
-            android:hint="Input Check In Name"
-            android:inputType="textPersonName"
-            android:textSize="14sp" />
+            android:layout_weight="1"
+            android:text="Enable Auto Check-in" />
     </LinearLayout>
 
 </LinearLayout>

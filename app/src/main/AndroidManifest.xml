@@ -38,7 +38,11 @@
             android:name=".GeocoderIntentService"
             android:exported="false" />
 
-        <activity android:name=".CheckInListActivity"></activity>
+        <activity android:name=".CheckInListActivity" />
+
+        <service
+            android:name=".AutomaticCheckinService"
+            android:exported="false"></service>
     </application>
 
 </manifest>
